@@ -646,9 +646,16 @@ bool cbm_mcp_server_has_cached_store(cbm_mcp_server_t *srv) {
 
 /* ── Cache dir + project DB path helpers ───────────────────────── */
 
-/* Returns the platform cache directory: ~/.cache/codebase-memory-mcp
+/* Returns the platform cache directory.
+ * Priority: CBM_CACHE_DIR env var > ~/.cache/codebase-memory-mcp
  * Writes to buf, returns buf for convenience. */
 static const char *cache_dir(char *buf, size_t bufsz) {
+    char env_buf[CBM_SZ_1K];
+    const char *env = cbm_safe_getenv("CBM_CACHE_DIR", env_buf, sizeof(env_buf), NULL);
+    if (env && env[0] != '\0') {
+        snprintf(buf, bufsz, "%s", env);
+        return buf;
+    }
     const char *home = cbm_get_home_dir();
     if (!home) {
         home = cbm_tmpdir();
@@ -3033,10 +3040,11 @@ static void maybe_auto_index(cbm_mcp_server_t *srv) {
     }
 
     /* Check if project already has a DB */
-    const char *home = cbm_get_home_dir();
-    if (home) {
+    {
+        char cdir[CBM_SZ_1K];
+        cache_dir(cdir, sizeof(cdir));
         char db_check[CBM_SZ_1K];
-        snprintf(db_check, sizeof(db_check), "%s/.cache/codebase-memory-mcp/%s.db", home,
+        snprintf(db_check, sizeof(db_check), "%s/%s.db", cdir,
                  srv->session_project);
         struct stat st;
         if (stat(db_check, &st) == 0) {

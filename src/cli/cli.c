@@ -2047,6 +2047,12 @@ unsigned char *cbm_extract_binary_from_zip(const unsigned char *data, int data_l
 
 static const char *get_cache_dir(const char *home_dir) {
     static char buf[CLI_BUF_1K];
+    char env_buf[CLI_BUF_1K];
+    const char *env = cbm_safe_getenv("CBM_CACHE_DIR", env_buf, sizeof(env_buf), NULL);
+    if (env && env[0] != '\0') {
+        snprintf(buf, sizeof(buf), "%s", env);
+        return buf;
+    }
     if (!home_dir) {
         home_dir = cbm_get_home_dir();
     }
@@ -2272,14 +2278,19 @@ int cbm_cmd_config(int argc, char **argv) {
         return 0;
     }
 
-    const char *home = cbm_get_home_dir();
-    if (!home) {
-        (void)fprintf(stderr, "error: HOME not set (use USERPROFILE on Windows)\n");
-        return CLI_TRUE;
-    }
-
     char cache_dir[CLI_BUF_1K];
-    snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/codebase-memory-mcp", home);
+    char env_buf[CLI_BUF_1K];
+    const char *env = cbm_safe_getenv("CBM_CACHE_DIR", env_buf, sizeof(env_buf), NULL);
+    if (env && env[0] != '\0') {
+        snprintf(cache_dir, sizeof(cache_dir), "%s", env);
+    } else {
+        const char *home = cbm_get_home_dir();
+        if (!home) {
+            (void)fprintf(stderr, "error: HOME not set (use USERPROFILE on Windows)\n");
+            return CLI_TRUE;
+        }
+        snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/codebase-memory-mcp", home);
+    }
 
     cbm_config_t *cfg = cbm_config_open(cache_dir);
     if (!cfg) {
