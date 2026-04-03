@@ -175,6 +175,52 @@ static void cbm_app_config_dir(char *buf, size_t bufsz) {
 /* ── JSON parsing ────────────────────────────────────────────────── */
 
 /*
+ * Parse exclude_dirs from a yyjson object root.
+ * Appends valid directory names to *dirs / *dir_count (growing via realloc).
+ * Returns 0 on success, -1 on alloc failure.
+ */
+static int parse_exclude_dirs(yyjson_val *root, char ***dirs, int *dir_count,
+                              const char *source_label) {
+    if (!yyjson_is_obj(root)) {
+        return 0;
+    }
+
+    yyjson_val *arr = yyjson_obj_get(root, "exclude_dirs");
+    if (!arr) {
+        return 0; /* key absent — fine */
+    }
+    if (!yyjson_is_arr(arr)) {
+        cbm_log_warn("userconfig.bad_exclude_dirs", "file", source_label);
+        return 0;
+    }
+
+    size_t idx, max;
+    yyjson_val *val;
+    yyjson_arr_foreach(arr, idx, max, val) {
+        const char *dir_str = yyjson_get_str(val);
+        if (!dir_str || !dir_str[0]) {
+            continue;
+        }
+
+        /* Grow the array */
+        char **tmp = realloc(*dirs, (size_t)(*dir_count + SKIP_ONE) * sizeof(char *));
+        if (!tmp) {
+            return CBM_NOT_FOUND;
+        }
+        *dirs = tmp;
+
+        char *copy = strdup(dir_str);
+        if (!copy) {
+            return CBM_NOT_FOUND;
+        }
+
+        (*dirs)[*dir_count] = copy;
+        (*dir_count)++;
+    }
+    return 0;
+}
+
+/*
  * Parse extra_extensions from a yyjson object root.
  * Appends valid entries to *entries / *count (growing via realloc).
  * Project-level entries (from_project=true) are appended after global
@@ -248,7 +294,8 @@ static int parse_extra_extensions(yyjson_val *root, cbm_userext_t **entries, int
  * Silently ignores missing files. Logs warnings for corrupt JSON.
  * Returns 0 on success (or absent file), -1 on alloc failure.
  */
-static int load_config_file(const char *path, cbm_userext_t **entries, int *count) {
+static int load_config_file(const char *path, cbm_userext_t **entries, int *count,
+                            char ***dirs, int *dir_count) {
     FILE *f = fopen(path, "rb");
     if (!f) {
         return 0; /* file absent — silently ignore */
@@ -295,6 +342,9 @@ static int load_config_file(const char *path, cbm_userext_t **entries, int *coun
 
     yyjson_val *root = yyjson_doc_get_root(doc);
     int rc = parse_extra_extensions(root, entries, count, path);
+    if (rc == 0) {
+        rc = parse_exclude_dirs(root, dirs, dir_count, path);
+    }
     yyjson_doc_free(doc);
     return rc;
 }
@@ -309,6 +359,8 @@ cbm_userconfig_t *cbm_userconfig_load(const char *repo_path) {
 
     cbm_userext_t *entries = NULL;
     int count = 0;
+    char **dirs = NULL;
+    int dir_count = 0;
 
     /* ── Step 1: Load global config ── */
     enum { PATH_BUF_SZ = 1280 };
@@ -318,11 +370,15 @@ cbm_userconfig_t *cbm_userconfig_load(const char *repo_path) {
     char global_path[PATH_BUF_SZ];
     snprintf(global_path, sizeof(global_path), "%s/config.json", global_dir);
 
-    if (load_config_file(global_path, &entries, &count) != 0) {
+    if (load_config_file(global_path, &entries, &count, &dirs, &dir_count) != 0) {
         for (int i = 0; i < count; i++) {
             free(entries[i].ext);
         }
         free(entries);
+        for (int i = 0; i < dir_count; i++) {
+            free(dirs[i]);
+        }
+        free(dirs);
         free(cfg);
         return NULL;
     }
@@ -334,12 +390,15 @@ cbm_userconfig_t *cbm_userconfig_load(const char *repo_path) {
         char project_path[PATH_BUF_SZ];
         snprintf(project_path, sizeof(project_path), "%s/.codebase-memory.json", repo_path);
 
-        if (load_config_file(project_path, &entries, &count) != 0) {
-            /* Free already-allocated entries */
+        if (load_config_file(project_path, &entries, &count, &dirs, &dir_count) != 0) {
             for (int i = 0; i < count; i++) {
                 free(entries[i].ext);
             }
             free(entries);
+            for (int i = 0; i < dir_count; i++) {
+                free(dirs[i]);
+            }
+            free(dirs);
             free(cfg);
             return NULL;
         }
@@ -379,6 +438,8 @@ cbm_userconfig_t *cbm_userconfig_load(const char *repo_path) {
 
     cfg->entries = entries;
     cfg->count = count;
+    cfg->exclude_dirs = dirs;
+    cfg->exclude_dirs_count = dir_count;
     return cfg;
 }
 
@@ -402,5 +463,9 @@ void cbm_userconfig_free(cbm_userconfig_t *cfg) {
         free(cfg->entries[i].ext);
     }
     free(cfg->entries);
+    for (int i = 0; i < cfg->exclude_dirs_count; i++) {
+        free(cfg->exclude_dirs[i]);
+    }
+    free(cfg->exclude_dirs);
     free(cfg);
 }

@@ -205,6 +205,41 @@ TEST(userconfig_free_null) {
     PASS();
 }
 
+/* ── Tests: exclude_dirs from project config ─────────────────────── */
+
+TEST(userconfig_exclude_dirs_basic) {
+    char dir[256];
+    snprintf(dir, sizeof(dir), "%s/uctest_exclude_dirs", cbm_tmpdir());
+    cbm_mkdir_p(dir, 0755);
+
+    char proj[512];
+    snprintf(proj, sizeof(proj), "%s/.codebase-memory.json", dir);
+    ASSERT_EQ(
+        write_json(proj,
+                   "{\"exclude_dirs\":[\"graph-ui\",\"vendored\",\"build\"]}"),
+        0);
+
+    cbm_userconfig_t *cfg = cbm_userconfig_load(dir);
+    ASSERT_NOT_NULL(cfg);
+    ASSERT_EQ(cfg->exclude_dirs_count, 3);
+    ASSERT_STR_EQ(cfg->exclude_dirs[0], "graph-ui");
+    ASSERT_STR_EQ(cfg->exclude_dirs[1], "vendored");
+    ASSERT_STR_EQ(cfg->exclude_dirs[2], "build");
+
+    cbm_userconfig_free(cfg);
+    remove(proj);
+    PASS();
+}
+
+TEST(userconfig_exclude_dirs_empty) {
+    cbm_userconfig_t *cfg = cbm_userconfig_load("/tmp/__nonexistent_repo_99999__");
+    ASSERT_NOT_NULL(cfg);
+    ASSERT_EQ(cfg->exclude_dirs_count, 0);
+    ASSERT_NULL(cfg->exclude_dirs);
+    cbm_userconfig_free(cfg);
+    PASS();
+}
+
 /* ── Suite ──────────────────────────────────────────────────────── */
 
 SUITE(userconfig) {
@@ -215,4 +250,6 @@ SUITE(userconfig) {
     RUN_TEST(userconfig_missing_files_ok);
     RUN_TEST(userconfig_integration_override);
     RUN_TEST(userconfig_free_null);
+    RUN_TEST(userconfig_exclude_dirs_basic);
+    RUN_TEST(userconfig_exclude_dirs_empty);
 }

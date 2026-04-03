@@ -29,6 +29,8 @@ typedef struct {
 typedef struct {
     cbm_userext_t *entries; /* heap-allocated array */
     int count;              /* number of entries */
+    char **exclude_dirs;    /* heap-allocated array of directory basenames to skip */
+    int exclude_dirs_count; /* number of exclude_dirs entries */
 } cbm_userconfig_t;
 
 /* ── API ────────────────────────────────────────────────────────── */

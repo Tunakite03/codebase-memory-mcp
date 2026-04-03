@@ -227,12 +227,20 @@ static void fl_add(file_list_t *fl, const char *abs_path, const char *rel_path, 
 
 /* ── Recursive walk ──────────────────────────────────────────────── */
 
-/* Check if a directory entry should be skipped (hardcoded dirs + gitignore). */
+/* Check if a directory entry should be skipped (hardcoded dirs + user exclude + gitignore). */
 static bool should_skip_directory(const char *entry_name, const char *rel_path,
                                   const cbm_discover_opts_t *opts, const cbm_gitignore_t *gitignore,
                                   const cbm_gitignore_t *cbmignore) {
     if (cbm_should_skip_dir(entry_name, opts ? opts->mode : CBM_MODE_FULL)) {
         return true;
+    }
+    /* Check user-configured exclude_dirs (basename match) */
+    if (opts && opts->exclude_dirs) {
+        for (int i = 0; opts->exclude_dirs[i]; i++) {
+            if (strcmp(entry_name, opts->exclude_dirs[i]) == 0) {
+                return true;
+            }
+        }
     }
     if (gitignore && cbm_gitignore_matches(gitignore, rel_path, true)) {
         return true;

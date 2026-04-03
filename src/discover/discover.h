@@ -92,9 +92,10 @@ typedef struct {
 } cbm_file_info_t;
 
 typedef struct {
-    cbm_index_mode_t mode;   /* CBM_MODE_FULL or CBM_MODE_FAST */
-    const char *ignore_file; /* path to .cbmignore file, or NULL */
-    int64_t max_file_size;   /* 0 = no limit */
+    cbm_index_mode_t mode;        /* CBM_MODE_FULL or CBM_MODE_FAST */
+    const char *ignore_file;      /* path to .cbmignore file, or NULL */
+    int64_t max_file_size;        /* 0 = no limit */
+    const char *const *exclude_dirs; /* NULL-terminated array of dir basenames to skip, or NULL */
 } cbm_discover_opts_t;
 
 /* Walk a repository directory tree and discover all source files.

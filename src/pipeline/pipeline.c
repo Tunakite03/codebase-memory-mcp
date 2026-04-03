@@ -691,10 +691,23 @@ int cbm_pipeline_run(cbm_pipeline_t *p) {
     cbm_set_user_lang_config(p->userconfig);
 
     /* Phase 1: Discover files */
+    /* Build NULL-terminated exclude_dirs array from userconfig */
+    const char **exclude_dirs_nt = NULL;
+    if (p->userconfig && p->userconfig->exclude_dirs_count > 0) {
+        exclude_dirs_nt =
+            calloc((size_t)p->userconfig->exclude_dirs_count + 1, sizeof(const char *));
+        if (exclude_dirs_nt) {
+            for (int i = 0; i < p->userconfig->exclude_dirs_count; i++) {
+                exclude_dirs_nt[i] = p->userconfig->exclude_dirs[i];
+            }
+            exclude_dirs_nt[p->userconfig->exclude_dirs_count] = NULL;
+        }
+    }
     cbm_discover_opts_t opts = {
         .mode = p->mode,
         .ignore_file = NULL,
         .max_file_size = 0,
+        .exclude_dirs = exclude_dirs_nt,
     };
     cbm_file_info_t *files = NULL;
     int file_count = 0;
@@ -704,6 +717,7 @@ int cbm_pipeline_run(cbm_pipeline_t *p) {
     }
     cbm_log_info("pipeline.discover", "files", itoa_buf(file_count), "elapsed_ms",
                  itoa_buf((int)elapsed_ms(t0)));
+    free(exclude_dirs_nt);
     if (rc != 0 || check_cancel(p)) {
         rc = CBM_NOT_FOUND;
         goto cleanup;
